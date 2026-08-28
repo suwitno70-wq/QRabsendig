@@ -22,6 +22,9 @@ import {
   Camera,
   FileSpreadsheet,
   BookOpen,
+  Key,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface MasterGuruProps {
@@ -48,6 +51,14 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
   
   // Custom Delete Confirm Modal state
   const [guruToDelete, setGuruToDelete] = useState<Guru | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyCredentials = (guru: Guru) => {
+    const text = `Akun Login SI-ABSEN Guru:\nNama: ${guru.nama}\nUsername: ${guru.username}\nPassword: ${guru.password || 'password123'}\nNIP: ${guru.nip || '-'}`;
+    navigator.clipboard?.writeText(text);
+    setCopiedId(guru.id);
+    setTimeout(() => setCopiedId(null), 2500);
+  };
 
   // Form state
   const [formData, setFormData] = useState<Partial<Guru>>({
@@ -349,14 +360,45 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
+            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 space-y-1.5 bg-slate-50/70 p-2.5 rounded-2xl">
               <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <Shield className="w-3 h-3 text-slate-400" />
-                  Akun Login:
+                <span className="flex items-center gap-1 font-semibold text-slate-600">
+                  <Shield className="w-3 h-3 text-emerald-700" />
+                  User:
                 </span>
-                <span className="font-mono font-bold text-slate-800">@{guru.username}</span>
+                <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  @{guru.username}
+                </span>
               </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1 font-semibold text-slate-600">
+                  <Key className="w-3 h-3 text-amber-600" />
+                  Pass:
+                </span>
+                <span className="font-mono text-slate-800 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  {guru.password || 'password123'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCopyCredentials(guru)}
+                className="w-full mt-1 py-1 px-2 text-[10px] font-bold bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+              >
+                {copiedId === guru.id ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span className="text-emerald-700 font-bold">Kredensial Tersalin!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 text-slate-400" />
+                    <span>Salin Info Login</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="text-[11px] text-slate-500 space-y-1">
               {guru.noHp && (
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1">

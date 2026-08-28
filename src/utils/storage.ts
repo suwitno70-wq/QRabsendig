@@ -207,52 +207,63 @@ export class AppStorage {
         const serverDb = result.data;
         let hasChanges = false;
 
-        // Sync Guru
+        // 1. Sync Guru (Protect local additions from being wiped by empty server arrays)
         if (serverDb.guru && Array.isArray(serverDb.guru)) {
           const localGuru = this.getGuruList();
-          if (JSON.stringify(localGuru) !== JSON.stringify(serverDb.guru)) {
+          if (serverDb.guru.length === 0 && localGuru.length > 0) {
+            // Push local data up to server
+            this.pushAllToServer();
+          } else if (JSON.stringify(localGuru) !== JSON.stringify(serverDb.guru)) {
             localStorage.setItem(STORAGE_KEYS.GURU, JSON.stringify(serverDb.guru));
             hasChanges = true;
           }
         }
 
-        // Sync Users
+        // 2. Sync Users
         if (serverDb.users && Array.isArray(serverDb.users)) {
           const localUsers = this.getUsers();
-          if (JSON.stringify(localUsers) !== JSON.stringify(serverDb.users)) {
+          if (serverDb.users.length === 0 && localUsers.length > 0) {
+            this.pushAllToServer();
+          } else if (JSON.stringify(localUsers) !== JSON.stringify(serverDb.users)) {
             localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(serverDb.users));
             hasChanges = true;
           }
         }
 
-        // Sync Kelas
+        // 3. Sync Kelas
         if (serverDb.kelas && Array.isArray(serverDb.kelas)) {
           const localKelas = this.getKelasList();
-          if (JSON.stringify(localKelas) !== JSON.stringify(serverDb.kelas)) {
+          if (serverDb.kelas.length === 0 && localKelas.length > 0) {
+            this.pushAllToServer();
+          } else if (JSON.stringify(localKelas) !== JSON.stringify(serverDb.kelas)) {
             localStorage.setItem(STORAGE_KEYS.KELAS, JSON.stringify(serverDb.kelas));
             hasChanges = true;
           }
         }
 
-        // Sync Mapel
+        // 4. Sync Mapel
         if (serverDb.mapel && Array.isArray(serverDb.mapel)) {
           const localMapel = this.getMapelList();
-          if (JSON.stringify(localMapel) !== JSON.stringify(serverDb.mapel)) {
+          if (serverDb.mapel.length === 0 && localMapel.length > 0) {
+            this.pushAllToServer();
+          } else if (JSON.stringify(localMapel) !== JSON.stringify(serverDb.mapel)) {
             localStorage.setItem(STORAGE_KEYS.MAPEL, JSON.stringify(serverDb.mapel));
             hasChanges = true;
           }
         }
 
-        // Sync Jadwal
+        // 5. Sync Jadwal
         if (serverDb.jadwal && Array.isArray(serverDb.jadwal)) {
           const localJadwal = this.getJadwalList();
-          if (JSON.stringify(localJadwal) !== JSON.stringify(serverDb.jadwal)) {
+          if (serverDb.jadwal.length === 0 && localJadwal.length > 0) {
+            this.pushAllToServer();
+          } else if (JSON.stringify(localJadwal) !== JSON.stringify(serverDb.jadwal)) {
             localStorage.setItem(STORAGE_KEYS.JADWAL, JSON.stringify(serverDb.jadwal));
             hasChanges = true;
           }
         }
 
-        // Sync Absensi (authoritative server sync, no resurrecting deleted records)
+        // 6. Sync Absensi
         if (serverDb.presensi && Array.isArray(serverDb.presensi)) {
           const localAbsensi = this.getAbsensiList();
           if (JSON.stringify(localAbsensi) !== JSON.stringify(serverDb.presensi)) {
@@ -261,7 +272,7 @@ export class AppStorage {
           }
         }
 
-        // Sync Settings
+        // 7. Sync Settings
         if (serverDb.settings) {
           const localSettings = this.getSettings();
           if (JSON.stringify(localSettings) !== JSON.stringify(serverDb.settings)) {

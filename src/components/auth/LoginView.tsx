@@ -102,19 +102,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, guruList, setting
       return;
     }
 
-    // 3. Check Guru list by username, NIP, NIK, or email
-    const foundGuru = guruList.find(
-      (g) =>
-        g.username.toLowerCase() === trimmedUser ||
-        g.nip.toLowerCase() === trimmedUser ||
-        (g.nik && g.nik.toLowerCase() === trimmedUser) ||
-        (g.email && g.email.toLowerCase() === trimmedUser)
-    );
+    // 3. Check Guru list by username, NIP, NIK, ID, or email (checks both props and AppStorage)
+    const allGurus = (guruList && guruList.length > 0) ? guruList : AppStorage.getGuruList();
+    const sanitizedInput = trimmedUser.replace(/[^a-z0-9]/g, '');
+
+    const foundGuru = allGurus.find((g) => {
+      const u = (g.username || '').toLowerCase().trim();
+      const n = (g.nip || '').toLowerCase().trim();
+      const cleanNip = n.replace(/[^a-z0-9]/g, '');
+      const nik = (g.nik || '').toLowerCase().trim();
+      const em = (g.email || '').toLowerCase().trim();
+      const gid = (g.id || '').toLowerCase().trim();
+
+      return (
+        u === trimmedUser ||
+        n === trimmedUser ||
+        (cleanNip && cleanNip === sanitizedInput) ||
+        nik === trimmedUser ||
+        em === trimmedUser ||
+        gid === trimmedUser
+      );
+    });
 
     if (foundGuru) {
-      const expectedPassword = (foundGuru.password || 'password123').toLowerCase();
-      if (trimmedPass !== expectedPassword && trimmedPass !== 'password123') {
-        setErrorMsg('Password Guru tidak sesuai. Silakan hubungi Administrator jika lupa kata sandi.');
+      const expectedPassword = (foundGuru.password || 'password123').trim();
+      if (
+        rawPass !== expectedPassword &&
+        rawPass !== 'password123' &&
+        trimmedPass !== expectedPassword.toLowerCase()
+      ) {
+        setErrorMsg('Password Guru tidak sesuai. Silakan periksa atau hubungi Administrator.');
         return;
       }
 
