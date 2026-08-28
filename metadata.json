@@ -1,0 +1,6 @@
+{
+  "name": "SI-ABSEN Guru Mengajar Realtime",
+  "description": "Aplikasi Absensi Guru Mengajar Realtime berbasis scan QR Code per kelas dengan validasi jadwal, GPS, selfie, live monitoring Kepala Madrasah, dan manajemen Admin lengkap.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

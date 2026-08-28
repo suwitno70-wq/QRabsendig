@@ -1,0 +1,166 @@
+{
+  "settings": {
+    "namaMadrasah": "Madrasah Ibtidaiyah Negeri 1 Model",
+    "npsn": "60728192",
+    "alamatMadrasah": "Jl. Kemenag No. 45, Komplek Pendidikan Islami, Jakarta Timur",
+    "namaKepalaMadrasah": "Drs. H. M. Syaifuddin, M.Pd.I",
+    "nipKepalaMadrasah": "197405121999031004",
+    "logoUrl": "https://images.unsplash.com/photo-1590402494682-cd3fb53b1f70?w=160&auto=format&fit=crop&q=80",
+    "timezone": "Asia/Jakarta",
+    "latitudeMadrasah": -6.229728,
+    "longitudeMadrasah": 106.829445,
+    "radiusAbsensiMeter": 150,
+    "batasTerlambatMenit": 10,
+    "modeQR": "PERMANEN",
+    "fiturLokasi": true,
+    "fiturSelfie": true,
+    "modeRamadan": false,
+    "toleransiScanAwalMenit": 15,
+    "autoRefreshIntervalDetik": 15,
+    "googleSheetsWebhookUrl": "",
+    "hideDemoButtons": true
+  },
+  "users": [
+    {
+      "id": "USR-ADMIN",
+      "username": "admin",
+      "name": "Administrator Madrasah",
+      "role": "ADMIN",
+      "email": "admin@madrasah.sch.id",
+      "nip": "198801152014031002",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80"
+    },
+    {
+      "id": "USR-KEPALA",
+      "username": "kepala",
+      "name": "Drs. H. M. Syaifuddin, M.Pd.I",
+      "role": "KEPALA",
+      "email": "kepala@madrasah.sch.id",
+      "nip": "197405121999031004",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80"
+    }
+  ],
+  "guru": [],
+  "kelas": [
+    {
+      "id": "KELAS-6A",
+      "namaKelas": "Kelas 6A",
+      "tingkat": "6",
+      "ruangan": "Gedung Umar bin Khattab Lt. 2 R.201",
+      "qrCode": "QR-KELAS-6A-WM928",
+      "status": "AKTIF",
+      "kapasitas": 28
+    },
+    {
+      "id": "KELAS-6B",
+      "namaKelas": "Kelas 6B",
+      "tingkat": "6",
+      "ruangan": "Gedung Umar bin Khattab Lt. 2 R.202",
+      "qrCode": "QR-KELAS-6B-WM929",
+      "status": "AKTIF",
+      "kapasitas": 30
+    },
+    {
+      "id": "KELAS-5A",
+      "namaKelas": "Kelas 5A",
+      "tingkat": "5",
+      "ruangan": "Gedung Abu Bakar Ash-Shiddiq Lt. 1 R.101",
+      "qrCode": "QR-KELAS-5A-WM814",
+      "status": "AKTIF",
+      "kapasitas": 30
+    },
+    {
+      "id": "KELAS-5B",
+      "namaKelas": "Kelas 5B",
+      "tingkat": "5",
+      "ruangan": "Gedung Abu Bakar Ash-Shiddiq Lt. 1 R.102",
+      "qrCode": "QR-KELAS-5B-WM815",
+      "status": "AKTIF",
+      "kapasitas": 29
+    },
+    {
+      "id": "KELAS-4A",
+      "namaKelas": "Kelas 4A",
+      "tingkat": "4",
+      "ruangan": "Gedung Ali bin Abi Thalib Lt. 1 R.103",
+      "qrCode": "QR-KELAS-4A-WM701",
+      "status": "AKTIF",
+      "kapasitas": 28
+    },
+    {
+      "id": "KELAS-4B",
+      "namaKelas": "Kelas 4B",
+      "tingkat": "4",
+      "ruangan": "Gedung Ali bin Abi Thalib Lt. 1 R.104",
+      "qrCode": "QR-KELAS-4B-WM702",
+      "status": "AKTIF",
+      "kapasitas": 31
+    }
+  ],
+  "mapel": [
+    {
+      "id": "MP-01",
+      "kode": "IPAS",
+      "nama": "Ilmu Pengetahuan Alam dan Sosial (IPAS)",
+      "kelompok": "Umum"
+    },
+    {
+      "id": "MP-02",
+      "kode": "BIND",
+      "nama": "Bahasa Indonesia",
+      "kelompok": "Umum"
+    },
+    {
+      "id": "MP-03",
+      "kode": "MTK",
+      "nama": "Matematika",
+      "kelompok": "Umum"
+    },
+    {
+      "id": "MP-04",
+      "kode": "QH",
+      "nama": "Al-Qur'an Hadis",
+      "kelompok": "Agama"
+    },
+    {
+      "id": "MP-05",
+      "kode": "AA",
+      "nama": "Akidah Akhlak",
+      "kelompok": "Agama"
+    },
+    {
+      "id": "MP-06",
+      "kode": "FIQ",
+      "nama": "Fikih",
+      "kelompok": "Agama"
+    },
+    {
+      "id": "MP-07",
+      "kode": "SKI",
+      "nama": "Sejarah Kebudayaan Islam (SKI)",
+      "kelompok": "Agama"
+    },
+    {
+      "id": "MP-08",
+      "kode": "BARB",
+      "nama": "Bahasa Arab",
+      "kelompok": "Agama"
+    },
+    {
+      "id": "MP-09",
+      "kode": "PJOK",
+      "nama": "Pendidikan Jasmani, Olahraga, dan Kesehatan",
+      "kelompok": "Umum"
+    },
+    {
+      "id": "MP-10",
+      "kode": "SBDP",
+      "nama": "Seni Budaya dan Prakarya",
+      "kelompok": "Muatan Lokal"
+    }
+  ],
+  "jadwal": [],
+  "presensi": [],
+  "logs": [],
+  "lastUpdated": "2026-08-28T14:00:00.000Z"
+}
