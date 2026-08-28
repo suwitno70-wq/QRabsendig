@@ -25,15 +25,56 @@ import {
   Key,
   Copy,
   Check,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface MasterGuruProps {
   guruList: Guru[];
   mapelList: Mapel[];
-  onSaveGuru: (guru: Guru) => void;
-  onDeleteGuru: (id: string) => void;
-  onImportGuru?: (imported: Guru[]) => void;
+  onSaveGuru: (guru: Guru) => Promise<void> | void;
+  onDeleteGuru: (id: string) => Promise<void> | void;
+  onImportGuru?: (imported: Guru[]) => Promise<void> | void;
 }
+
+// Compress and resize uploaded photos for fast storage and avoid quota issues
+const compressImage = (file: File, maxDim = 256, quality = 0.8): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
 
 export const MasterGuru: React.FC<MasterGuruProps> = ({
   guruList,
@@ -45,6 +86,8 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [editingGuru, setEditingGuru] = useState<Guru | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string>('');
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [csvInput, setCsvInput] = useState<string>('');
   const [importStatus, setImportStatus] = useState<string>('');
@@ -78,9 +121,9 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
 
   // Helper to generate guaranteed unique Guru ID
   const generateUniqueGuruId = (list: Guru[]): string => {
-    const numericIds = list
+    const numericIds = (list || [])
       .map((g) => {
-        const match = g.id.match(/(\d+)/);
+        const match = (g.id || '').match(/(\d+)/);
         return match ? parseInt(match[0], 10) : 0;
       })
       .filter((n) => !isNaN(n));
@@ -91,7 +134,7 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
     
     // Safety check against collisions
     let collisionCount = 1;
-    while (list.some((g) => g.id === candidate)) {
+    while ((list || []).some((g) => g.id === candidate)) {
       candidate = `GURU-${String(nextNum + collisionCount).padStart(2, '0')}`;
       collisionCount++;
     }
@@ -106,7 +149,7 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
     if (!base) base = 'guru';
     let candidate = base;
     let counter = 1;
-    while (list.some((g) => g.username.toLowerCase() === candidate.toLowerCase())) {
+    while ((list || []).some((g) => (g.username || '').toLowerCase() === candidate.toLowerCase())) {
       candidate = `${base}${counter}`;
       counter++;
     }
@@ -139,6 +182,7 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
       pendidikan: 'S1 Pendidikan',
       email: '',
     });
+    setFormError('');
     setEditingGuru(null);
     setIsModalOpen(true);
   };
@@ -146,29 +190,33 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
   const handleOpenEdit = (guru: Guru) => {
     setEditingGuru(guru);
     setFormData({ ...guru });
+    setFormError('');
     setIsModalOpen(true);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        setFormData((prev) => ({ ...prev, fotoUrl: base64 }));
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImage(file, 256, 0.82);
+        setFormData((prev) => ({ ...prev, fotoUrl: compressed }));
+      } catch (err) {
+        console.error('Failed to compress image:', err);
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
+
     if (!formData.nama || !formData.nama.trim()) {
+      setFormError('Nama lengkap guru wajib diisi.');
       return;
     }
 
     let finalId = formData.id;
-    if (!editingGuru && (!finalId || guruList.some((g) => g.id === finalId))) {
+    if (!editingGuru && (!finalId || (guruList || []).some((g) => g.id === finalId))) {
       finalId = generateUniqueGuruId(guruList);
     }
 
@@ -193,13 +241,20 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
       email: formData.email?.trim() || '',
     };
 
-    onSaveGuru(finalGuru);
-    setIsModalOpen(false);
+    setIsSubmitting(true);
+    try {
+      await onSaveGuru(finalGuru);
+      setIsModalOpen(false);
+    } catch (err: any) {
+      setFormError(err?.message || 'Gagal menyimpan data guru. Silakan periksa kembali.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (guruToDelete) {
-      onDeleteGuru(guruToDelete.id);
+      await onDeleteGuru(guruToDelete.id);
       setGuruToDelete(null);
     }
   };
@@ -213,7 +268,7 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
     downloadCSV('template-import-guru.csv', GURU_CSV_TEMPLATE);
   };
 
-  const handleImportSubmit = () => {
+  const handleImportSubmit = async () => {
     setImportStatus('');
     if (!csvInput.trim()) {
       setImportStatus('Silakan tempel isi CSV atau unggah file.');
@@ -226,18 +281,24 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
       return;
     }
 
-    if (onImportGuru) {
-      onImportGuru(parsed);
-    } else {
-      parsed.forEach((g) => onSaveGuru(g));
-    }
+    try {
+      if (onImportGuru) {
+        await onImportGuru(parsed);
+      } else {
+        for (const g of parsed) {
+          await onSaveGuru(g);
+        }
+      }
 
-    setImportStatus(`Berhasil mengimpor ${parsed.length} guru!`);
-    setTimeout(() => {
-      setIsImportModalOpen(false);
-      setCsvInput('');
-      setImportStatus('');
-    }, 1500);
+      setImportStatus(`Berhasil mengimpor ${parsed.length} guru!`);
+      setTimeout(() => {
+        setIsImportModalOpen(false);
+        setCsvInput('');
+        setImportStatus('');
+      }, 1200);
+    } catch (err: any) {
+      setImportStatus(`Gagal mengimpor: ${err?.message || 'Terjadi kesalahan'}`);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,12 +313,12 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
     }
   };
 
-  const filtered = guruList.filter(
+  const filtered = (guruList || []).filter(
     (g) =>
-      g.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      g.nip.includes(searchTerm) ||
-      g.mapelUtama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      g.username.toLowerCase().includes(searchTerm.toLowerCase())
+      (g.nama || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (g.nip || '').includes(searchTerm) ||
+      (g.mapelUtama || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (g.username || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -471,6 +532,13 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-3 text-xs flex-1">
+              {formError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span className="font-medium">{formError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
                   Nama Lengkap &amp; Gelar: <span className="text-rose-500">*</span>
@@ -623,16 +691,19 @@ export const MasterGuru: React.FC<MasterGuruProps> = ({
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl shadow-md shadow-emerald-700/20 cursor-pointer"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl shadow-md shadow-emerald-700/20 cursor-pointer disabled:opacity-50 flex items-center gap-2"
                 >
-                  {editingGuru ? 'Simpan Perubahan' : 'Tambahkan Guru'}
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{editingGuru ? 'Simpan Perubahan' : 'Tambahkan Guru'}</span>
                 </button>
               </div>
             </form>

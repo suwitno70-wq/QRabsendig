@@ -153,6 +153,25 @@ export class AppStorage {
   private static lastMutationTime = 0;
   private static isOnline = true;
 
+  // Safe localStorage writer with automatic quota cleanup fallback
+  private static safeSetItem(key: string, value: string): boolean {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      console.warn(`localStorage setItem failed for ${key}, attempting quota cleanup:`, e);
+      try {
+        // Trim logs if quota exceeded
+        localStorage.removeItem(STORAGE_KEYS.LOGS);
+        localStorage.setItem(key, value);
+        return true;
+      } catch (err2) {
+        console.error(`localStorage completely full or unavailable:`, err2);
+        return false;
+      }
+    }
+  }
+
   // Subscription pattern for reactive state updates
   static subscribe(callback: StorageListener): () => void {
     this.listeners.add(callback);
@@ -390,7 +409,7 @@ export class AppStorage {
   static getGuruList(): Guru[] {
     const raw = localStorage.getItem(STORAGE_KEYS.GURU);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.GURU, JSON.stringify(INITIAL_GURU));
+      this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(INITIAL_GURU));
       return INITIAL_GURU;
     }
     try {
@@ -413,7 +432,7 @@ export class AppStorage {
       } else {
         list.push(guru);
       }
-      localStorage.setItem(STORAGE_KEYS.GURU, JSON.stringify(list));
+      this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(list));
       this.syncUserForGuru(guru);
       this.logAction(`Data guru disimpan: ${guru.nama}`, 'ADMIN', 'INFO', guru.id);
       this.notify();
@@ -426,11 +445,11 @@ export class AppStorage {
         });
         if (res.ok) {
           const json = await res.json();
-          if (json.guruList) {
-            localStorage.setItem(STORAGE_KEYS.GURU, JSON.stringify(json.guruList));
+          if (json.guruList && Array.isArray(json.guruList) && json.guruList.length > 0) {
+            this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(json.guruList));
           }
-          if (json.users) {
-            localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(json.users));
+          if (json.users && Array.isArray(json.users) && json.users.length > 0) {
+            this.safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(json.users));
           }
         }
         this.isOnline = true;
@@ -444,25 +463,70 @@ export class AppStorage {
     }
   }
 
+  static async saveGuruList(gurus: Guru[]): Promise<boolean> {
+    if (!Array.isArray(gurus) || gurus.length === 0) return true;
+    this.pendingMutations++;
+    this.lastMutationTime = Date.now();
+    try {
+      const list = this.getGuruList();
+      for (const g of gurus) {
+        const index = list.findIndex((item) => item.id === g.id);
+        if (index >= 0) {
+          list[index] = g;
+        } else {
+          list.push(g);
+        }
+        this.syncUserForGuru(g);
+      }
+      this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(list));
+      this.logAction(`Impor ${gurus.length} data guru`, 'ADMIN', 'INFO');
+      this.notify();
+
+      try {
+        const res = await fetch('/api/guru/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: gurus }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.guruList && Array.isArray(json.guruList)) {
+            this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(json.guruList));
+          }
+          if (json.users && Array.isArray(json.users)) {
+            this.safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(json.users));
+          }
+        }
+        this.isOnline = true;
+      } catch (e) {
+        console.warn('Batch guru sync to server failed, saved locally', e);
+      }
+      return true;
+    } finally {
+      this.lastMutationTime = Date.now();
+      this.pendingMutations = Math.max(0, this.pendingMutations - 1);
+    }
+  }
+
   static async deleteGuru(id: string): Promise<boolean> {
     this.pendingMutations++;
     this.lastMutationTime = Date.now();
     try {
       const list = this.getGuruList().filter((g) => g.id !== id);
-      localStorage.setItem(STORAGE_KEYS.GURU, JSON.stringify(list));
+      this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(list));
 
       const users = this.getUsers().filter((u) => u.guruId !== id);
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      this.safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(users));
 
       // Clean up wali kelas in kelas
       const kelas = this.getKelasList().map((k) =>
         k.waliKelasId === id ? { ...k, waliKelasId: '-', waliKelasNama: '-' } : k
       );
-      localStorage.setItem(STORAGE_KEYS.KELAS, JSON.stringify(kelas));
+      this.safeSetItem(STORAGE_KEYS.KELAS, JSON.stringify(kelas));
 
       // Clean up assigned jadwal
       const jadwal = this.getJadwalList().filter((j) => j.guruId !== id);
-      localStorage.setItem(STORAGE_KEYS.JADWAL, JSON.stringify(jadwal));
+      this.safeSetItem(STORAGE_KEYS.JADWAL, JSON.stringify(jadwal));
 
       this.logAction(`Guru dihapus: ${id}`, 'ADMIN', 'WARNING', id);
       this.notify();
@@ -473,10 +537,10 @@ export class AppStorage {
         });
         if (res.ok) {
           const json = await res.json();
-          if (json.guruList) localStorage.setItem(STORAGE_KEYS.GURU, JSON.stringify(json.guruList));
-          if (json.users) localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(json.users));
-          if (json.kelasList) localStorage.setItem(STORAGE_KEYS.KELAS, JSON.stringify(json.kelasList));
-          if (json.jadwalList) localStorage.setItem(STORAGE_KEYS.JADWAL, JSON.stringify(json.jadwalList));
+          if (json.guruList && Array.isArray(json.guruList)) this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(json.guruList));
+          if (json.users && Array.isArray(json.users)) this.safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(json.users));
+          if (json.kelasList && Array.isArray(json.kelasList)) this.safeSetItem(STORAGE_KEYS.KELAS, JSON.stringify(json.kelasList));
+          if (json.jadwalList && Array.isArray(json.jadwalList)) this.safeSetItem(STORAGE_KEYS.JADWAL, JSON.stringify(json.jadwalList));
         }
         this.isOnline = true;
       } catch (e) {
@@ -507,7 +571,7 @@ export class AppStorage {
     } else {
       users.push(userObj);
     }
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    this.safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
   // --- KELAS ---

@@ -260,32 +260,52 @@ app.post('/api/sync', (req, res) => {
 app.post('/api/guru', (req, res) => {
   try {
     const guru = req.body;
-    if (!guru || !guru.id || !guru.nama) {
-      return res.status(400).json({ success: false, error: 'Data guru tidak valid (nama dan id wajib)' });
+    if (!guru || !guru.nama || typeof guru.nama !== 'string' || !guru.nama.trim()) {
+      return res.status(400).json({ success: false, error: 'Data guru tidak valid: Nama wajib diisi' });
     }
 
+    const guruId = guru.id && guru.id.trim() ? guru.id.trim() : `GURU-${Date.now()}`;
+    const cleanUsername = guru.username && guru.username.trim()
+      ? guru.username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '')
+      : `guru_${Date.now().toString(36)}`;
+
+    const sanitizedGuru = {
+      id: guruId,
+      nip: guru.nip?.trim() || '-',
+      nik: guru.nik?.trim() || '-',
+      nama: guru.nama.trim(),
+      username: cleanUsername,
+      password: guru.password?.trim() || 'password123',
+      mapelUtama: guru.mapelUtama?.trim() || 'Umum',
+      noHp: guru.noHp?.trim() || '-',
+      status: guru.status || 'AKTIF',
+      fotoUrl: guru.fotoUrl || '',
+      pendidikan: guru.pendidikan?.trim() || 'S1 Pendidikan',
+      email: guru.email?.trim() || '',
+    };
+
     let currentDb = readDb();
-    const list = currentDb.guru || [];
-    const index = list.findIndex((g: any) => g.id === guru.id);
+    const list = Array.isArray(currentDb.guru) ? currentDb.guru : [];
+    const index = list.findIndex((g: any) => g.id === sanitizedGuru.id);
     if (index >= 0) {
-      list[index] = guru;
+      list[index] = { ...list[index], ...sanitizedGuru };
     } else {
-      list.push(guru);
+      list.push(sanitizedGuru);
     }
     currentDb.guru = list;
 
     // Sync users list
-    const users = currentDb.users || [];
-    const userIndex = users.findIndex((u: any) => u.guruId === guru.id || u.username === guru.username);
+    const users = Array.isArray(currentDb.users) ? currentDb.users : [];
+    const userIndex = users.findIndex((u: any) => u.guruId === sanitizedGuru.id || u.username === sanitizedGuru.username);
     const userObj = {
-      id: userIndex >= 0 ? users[userIndex].id : `USR-${guru.id}`,
-      username: guru.username,
-      name: guru.nama,
+      id: userIndex >= 0 ? users[userIndex].id : `USR-${sanitizedGuru.id}`,
+      username: sanitizedGuru.username,
+      name: sanitizedGuru.nama,
       role: 'GURU',
-      guruId: guru.id,
-      email: guru.email || '',
-      nip: guru.nip || '',
-      avatarUrl: guru.fotoUrl || '',
+      guruId: sanitizedGuru.id,
+      email: sanitizedGuru.email || '',
+      nip: sanitizedGuru.nip || '',
+      avatarUrl: sanitizedGuru.fotoUrl || '',
     };
     if (userIndex >= 0) {
       users[userIndex] = userObj;
@@ -295,8 +315,79 @@ app.post('/api/guru', (req, res) => {
     currentDb.users = users;
 
     writeDb(currentDb);
-    res.json({ success: true, data: guru, guruList: currentDb.guru, users: currentDb.users });
+    res.json({ success: true, data: sanitizedGuru, guruList: currentDb.guru, users: currentDb.users });
   } catch (err: any) {
+    console.error('Error saving guru:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3b. Batch Save/Import Guru
+app.post('/api/guru/batch', (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'Daftar guru tidak valid' });
+    }
+
+    let currentDb = readDb();
+    const list = Array.isArray(currentDb.guru) ? [...currentDb.guru] : [];
+    const users = Array.isArray(currentDb.users) ? [...currentDb.users] : [];
+
+    for (const guru of items) {
+      if (!guru.nama || !guru.nama.trim()) continue;
+      const guruId = guru.id && guru.id.trim() ? guru.id.trim() : `GURU-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const cleanUsername = guru.username && guru.username.trim()
+        ? guru.username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '')
+        : `guru_${Date.now().toString(36)}`;
+
+      const sanitizedGuru = {
+        id: guruId,
+        nip: guru.nip?.trim() || '-',
+        nik: guru.nik?.trim() || '-',
+        nama: guru.nama.trim(),
+        username: cleanUsername,
+        password: guru.password?.trim() || 'password123',
+        mapelUtama: guru.mapelUtama?.trim() || 'Umum',
+        noHp: guru.noHp?.trim() || '-',
+        status: guru.status || 'AKTIF',
+        fotoUrl: guru.fotoUrl || '',
+        pendidikan: guru.pendidikan?.trim() || 'S1 Pendidikan',
+        email: guru.email?.trim() || '',
+      };
+
+      const gIdx = list.findIndex((g: any) => g.id === sanitizedGuru.id);
+      if (gIdx >= 0) {
+        list[gIdx] = { ...list[gIdx], ...sanitizedGuru };
+      } else {
+        list.push(sanitizedGuru);
+      }
+
+      const uIdx = users.findIndex((u: any) => u.guruId === sanitizedGuru.id || u.username === sanitizedGuru.username);
+      const userObj = {
+        id: uIdx >= 0 ? users[uIdx].id : `USR-${sanitizedGuru.id}`,
+        username: sanitizedGuru.username,
+        name: sanitizedGuru.nama,
+        role: 'GURU',
+        guruId: sanitizedGuru.id,
+        email: sanitizedGuru.email || '',
+        nip: sanitizedGuru.nip || '',
+        avatarUrl: sanitizedGuru.fotoUrl || '',
+      };
+      if (uIdx >= 0) {
+        users[uIdx] = userObj;
+      } else {
+        users.push(userObj);
+      }
+    }
+
+    currentDb.guru = list;
+    currentDb.users = users;
+    writeDb(currentDb);
+
+    res.json({ success: true, count: items.length, guruList: currentDb.guru, users: currentDb.users });
+  } catch (err: any) {
+    console.error('Error batch saving guru:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

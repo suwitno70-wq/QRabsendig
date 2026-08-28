@@ -301,9 +301,7 @@ export default function App() {
                     addToast('info', 'Data guru dihapus', deleted?.nama || id);
                   }}
                   onImportGuru={async (imported) => {
-                    for (const g of imported) {
-                      await AppStorage.saveGuru(g);
-                    }
+                    await AppStorage.saveGuruList(imported);
                     setGuruList(AppStorage.getGuruList());
                     addToast('success', `Berhasil mengimpor ${imported.length} guru`);
                   }}
@@ -346,9 +344,7 @@ export default function App() {
                     addToast('info', 'Data guru dihapus', deleted?.nama || id);
                   }}
                   onImportGuru={async (imported) => {
-                    for (const g of imported) {
-                      await AppStorage.saveGuru(g);
-                    }
+                    await AppStorage.saveGuruList(imported);
                     setGuruList(AppStorage.getGuruList());
                     addToast('success', `Berhasil mengimpor ${imported.length} guru`);
                   }}
