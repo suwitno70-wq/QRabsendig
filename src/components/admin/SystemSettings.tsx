@@ -43,8 +43,42 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [backupMsg, setBackupMsg] = useState<{ text: string; success: boolean } | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState<boolean>(false);
   const [isClearAbsensiConfirmOpen, setIsClearAbsensiConfirmOpen] = useState<boolean>(false);
+  const [isSyncingGAS, setIsSyncingGAS] = useState<boolean>(false);
+  const [gasSyncStatus, setGasSyncStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   const gasCode = generateGASBackendCode(formData);
+
+  const handleSyncFromGAS = async () => {
+    setIsSyncingGAS(true);
+    setGasSyncStatus(null);
+    try {
+      const result = await AppStorage.syncFromGoogleSheets(formData.googleSheetsWebhookUrl);
+      setGasSyncStatus(result);
+    } catch (err: any) {
+      setGasSyncStatus({
+        success: false,
+        message: err?.message || 'Gagal terhubung ke Google Apps Script',
+      });
+    } finally {
+      setIsSyncingGAS(false);
+    }
+  };
+
+  const handlePushToGAS = async () => {
+    setIsSyncingGAS(true);
+    setGasSyncStatus(null);
+    try {
+      const result = await AppStorage.pushAllToGoogleSheets(formData.googleSheetsWebhookUrl);
+      setGasSyncStatus(result);
+    } catch (err: any) {
+      setGasSyncStatus({
+        success: false,
+        message: err?.message || 'Gagal mengirim data ke Google Apps Script',
+      });
+    } finally {
+      setIsSyncingGAS(false);
+    }
+  };
 
   const handleGetCurrentLocation = async () => {
     setIsGettingGps(true);
@@ -613,10 +647,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-3">
             <h4 className="font-bold text-emerald-900 text-xs flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-emerald-700" />
-              Integrasi Otomatis ke Google Spreadsheet (Opsional Webhook):
+              Integrasi Cloud Database Google Spreadsheet (Web App):
             </h4>
             <p className="text-slate-600 text-[11px] leading-relaxed">
-              Jika Anda sudah men-deploy script Apps Script di bawah sebagai Web App, masukkan URL Web App Google Script Anda di bawah ini agar setiap ada guru yang melakukan scan presensi, datanya langsung terkirim otomatis masuk ke baris Google Sheets Anda secara live.
+              Masukkan URL Web App Google Apps Script Anda untuk sinkronisasi otomatis dua arah (cloud sync) ke Google Spreadsheet. Sangat cocok saat aplikasi di-deploy ke <strong>Vercel</strong> atau <strong>GitHub Pages</strong>.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
@@ -631,9 +665,49 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 onClick={(e) => handleSubmit(e)}
                 className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold transition text-xs shrink-0 cursor-pointer"
               >
-                Simpan URL Webhook
+                Simpan URL
               </button>
             </div>
+
+            {/* Sync Action Buttons */}
+            <div className="pt-2 border-t border-emerald-200/60 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleSyncFromGAS}
+                disabled={isSyncingGAS || !formData.googleSheetsWebhookUrl}
+                className="px-3 py-2 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold transition text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGAS ? 'animate-spin' : ''}`} />
+                <span>Tarik Data dari Spreadsheet (Pull)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePushToGAS}
+                disabled={isSyncingGAS || !formData.googleSheetsWebhookUrl}
+                className="px-3 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold transition text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Unggah Seluruh Data ke Spreadsheet (Push All)</span>
+              </button>
+            </div>
+
+            {gasSyncStatus && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                  gasSyncStatus.success
+                    ? 'bg-emerald-100/80 text-emerald-900 border border-emerald-300'
+                    : 'bg-rose-100 text-rose-900 border border-rose-300'
+                }`}
+              >
+                {gasSyncStatus.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                )}
+                <span>{gasSyncStatus.message}</span>
+              </div>
+            )}
           </div>
 
           <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl space-y-2 text-xs">

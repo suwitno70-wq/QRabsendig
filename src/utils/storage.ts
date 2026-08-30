@@ -191,6 +191,168 @@ export class AppStorage {
     });
   }
 
+  // --- GOOGLE APPS SCRIPT CLOUD SYNC ENGINE (OPTIMIZED FOR GITHUB PAGES / VERCEL) ---
+  static async pushMutationToGAS(action: string, payload: any) {
+    try {
+      const settings = this.getSettings();
+      if (!settings.googleSheetsWebhookUrl || !settings.googleSheetsWebhookUrl.trim().startsWith('http')) return;
+      const url = settings.googleSheetsWebhookUrl.trim();
+
+      const body = JSON.stringify({
+        action,
+        data: payload,
+        timestamp: new Date().toISOString(),
+      });
+
+      // text/plain prevents browser CORS preflight blocking in static SPA environments
+      fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body,
+      }).catch((err) => {
+        console.warn('Background GAS push mutation notice:', err);
+      });
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  static async syncFromGoogleSheets(customUrl?: string): Promise<{
+    success: boolean;
+    message: string;
+    counts?: { guru: number; kelas: number; mapel: number; jadwal: number; presensi: number };
+  }> {
+    try {
+      const settings = this.getSettings();
+      const url = (customUrl || settings.googleSheetsWebhookUrl || '').trim();
+      if (!url || !url.startsWith('http')) {
+        return { success: false, message: 'URL Google Apps Script belum diisi di Pengaturan.' };
+      }
+
+      const separator = url.includes('?') ? '&' : '?';
+      const fetchUrl = `${url}${separator}action=getAll&_t=${Date.now()}`;
+      const res = await fetch(fetchUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: Gagal menghubungi Google Apps Script`);
+      }
+
+      const json = await res.json();
+      if (!json || (!json.success && !json.data)) {
+        throw new Error(json.error || 'Format respon Google Apps Script tidak sesuai format.');
+      }
+
+      const cloudDb = json.data || json;
+      let updatedGuru = 0;
+      let updatedKelas = 0;
+      let updatedMapel = 0;
+      let updatedJadwal = 0;
+      let updatedPresensi = 0;
+
+      // 1. Sync Guru
+      if (Array.isArray(cloudDb.guru) && cloudDb.guru.length > 0) {
+        this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(cloudDb.guru));
+        updatedGuru = cloudDb.guru.length;
+        // Also sync user logins for each guru
+        cloudDb.guru.forEach((g: Guru) => this.syncUserForGuru(g));
+      }
+
+      // 2. Sync Kelas
+      if (Array.isArray(cloudDb.kelas) && cloudDb.kelas.length > 0) {
+        this.safeSetItem(STORAGE_KEYS.KELAS, JSON.stringify(cloudDb.kelas));
+        updatedKelas = cloudDb.kelas.length;
+      }
+
+      // 3. Sync Mapel
+      if (Array.isArray(cloudDb.mapel) && cloudDb.mapel.length > 0) {
+        this.safeSetItem(STORAGE_KEYS.MAPEL, JSON.stringify(cloudDb.mapel));
+        updatedMapel = cloudDb.mapel.length;
+      }
+
+      // 4. Sync Jadwal
+      if (Array.isArray(cloudDb.jadwal) && cloudDb.jadwal.length > 0) {
+        this.safeSetItem(STORAGE_KEYS.JADWAL, JSON.stringify(cloudDb.jadwal));
+        updatedJadwal = cloudDb.jadwal.length;
+      }
+
+      // 5. Sync Presensi
+      if (Array.isArray(cloudDb.presensi) && cloudDb.presensi.length > 0) {
+        this.safeSetItem(STORAGE_KEYS.ABSENSI, JSON.stringify(cloudDb.presensi));
+        updatedPresensi = cloudDb.presensi.length;
+      }
+
+      // 6. Sync Settings
+      if (cloudDb.settings && typeof cloudDb.settings === 'object' && Object.keys(cloudDb.settings).length > 0) {
+        const current = this.getSettings();
+        this.safeSetItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...current, ...cloudDb.settings }));
+      }
+
+      this.logAction('Database disinkronkan dari Google Spreadsheet', 'SYSTEM', 'SUCCESS');
+      this.notify();
+
+      return {
+        success: true,
+        message: `Sinkronisasi sukses! Data terintegrasi: ${updatedGuru} Guru, ${updatedKelas} Kelas, ${updatedMapel} Mapel, ${updatedJadwal} Jadwal, ${updatedPresensi} Presensi.`,
+        counts: {
+          guru: updatedGuru,
+          kelas: updatedKelas,
+          mapel: updatedMapel,
+          jadwal: updatedJadwal,
+          presensi: updatedPresensi,
+        },
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Gagal menarik data dari Google Spreadsheet: ${err.message || 'Cek koneksi internet dan izin Web App (Anyone)'}`,
+      };
+    }
+  }
+
+  static async pushAllToGoogleSheets(customUrl?: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const settings = this.getSettings();
+      const url = (customUrl || settings.googleSheetsWebhookUrl || '').trim();
+      if (!url || !url.startsWith('http')) {
+        return { success: false, message: 'URL Google Apps Script belum diisi di Pengaturan.' };
+      }
+
+      const payload = {
+        action: 'syncAll',
+        settings: this.getSettings(),
+        users: this.getUsers(),
+        guru: this.getGuruList(),
+        kelas: this.getKelasList(),
+        mapel: this.getMapelList(),
+        jadwal: this.getJadwalList(),
+        presensi: this.getAbsensiList(),
+        timestamp: new Date().toISOString(),
+      };
+
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+
+      this.logAction('Seluruh database lokal diunggah ke Google Spreadsheet', 'ADMIN', 'SUCCESS');
+      return {
+        success: true,
+        message: 'Seluruh data lokal berhasil dikirim dan diunggah ke Google Spreadsheet!',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Gagal mengirim data ke Google Spreadsheet: ${err.message || 'Terjadi kesalahan jaringan'}`,
+      };
+    }
+  }
+
   // --- REAL-TIME SERVER SYNC ENGINE ---
   static initSync() {
     if (this.syncInitialized || typeof window === 'undefined') return;
@@ -355,6 +517,9 @@ export class AppStorage {
       this.logAction('Pengaturan sistem disimpan', 'ADMIN', 'INFO', settings.namaMadrasah);
       this.notify();
 
+      // Sync to Google Apps Script cloud if configured
+      this.pushMutationToGAS('saveSettings', settings);
+
       try {
         await fetch('/api/settings', {
           method: 'POST',
@@ -437,6 +602,9 @@ export class AppStorage {
       this.logAction(`Data guru disimpan: ${guru.nama}`, 'ADMIN', 'INFO', guru.id);
       this.notify();
 
+      // Sync to Google Apps Script cloud if configured
+      this.pushMutationToGAS('saveGuru', guru);
+
       try {
         const res = await fetch('/api/guru', {
           method: 'POST',
@@ -481,6 +649,9 @@ export class AppStorage {
       this.safeSetItem(STORAGE_KEYS.GURU, JSON.stringify(list));
       this.logAction(`Impor ${gurus.length} data guru`, 'ADMIN', 'INFO');
       this.notify();
+
+      // Sync to Google Apps Script cloud
+      this.pushMutationToGAS('syncAll', { guru: list });
 
       try {
         const res = await fetch('/api/guru/batch', {
@@ -605,6 +776,9 @@ export class AppStorage {
       this.logAction(`Data kelas disimpan: ${kelas.namaKelas}`, 'ADMIN', 'INFO', kelas.id);
       this.notify();
 
+      // Sync to Google Apps Script cloud
+      this.pushMutationToGAS('saveKelas', kelas);
+
       try {
         const res = await fetch('/api/kelas', {
           method: 'POST',
@@ -638,6 +812,9 @@ export class AppStorage {
 
       this.logAction(`Kelas dihapus: ${id}`, 'ADMIN', 'WARNING', id);
       this.notify();
+
+      // Sync to Google Apps Script cloud
+      this.pushMutationToGAS('syncAll', { kelas: list, jadwal });
 
       try {
         const res = await fetch(`/api/kelas/${encodeURIComponent(id)}`, {
@@ -690,6 +867,9 @@ export class AppStorage {
       this.logAction(`Mata pelajaran disimpan: ${mapel.nama}`, 'ADMIN', 'INFO', mapel.kode);
       this.notify();
 
+      // Sync to Google Apps Script cloud
+      this.pushMutationToGAS('saveMapel', mapel);
+
       try {
         const res = await fetch('/api/mapel', {
           method: 'POST',
@@ -723,6 +903,9 @@ export class AppStorage {
 
       this.logAction(`Mapel dihapus: ${id}`, 'ADMIN', 'WARNING', id);
       this.notify();
+
+      // Sync to Google Apps Script cloud
+      this.pushMutationToGAS('syncAll', { mapel: list, jadwal });
 
       try {
         const res = await fetch(`/api/mapel/${encodeURIComponent(id)}`, {
@@ -779,6 +962,9 @@ export class AppStorage {
         jadwal.id
       );
       this.notify();
+
+      // Sync to Google Apps Script cloud
+      this.pushMutationToGAS('saveJadwal', jadwal);
 
       try {
         const res = await fetch('/api/jadwal', {
